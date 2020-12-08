@@ -1,0 +1,105 @@
+---
+# tasks file for common
+### replace apt sources for a local mirror, if one exists in roles/files
+#- name: get file stat to be able to perform a check in the following task
+#  local_action: stat path=sources.list
+#  register: file
+
+#- name: copy local sources.file if it exists
+#  copy:
+#    src: sources.list
+#    dest: /etc/apt/
+#    backup: yes
+#    when: file.stat.exists
+#- vars:
+#    USERNAME: "{{ lookup('env','USER') }}"
+- name: Install gpg
+  apt:
+    pkg:
+    - gpg
+
+
+- name: download and add Docker GPG key to apt
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg 
+    state: present
+
+- name: append docker repository to sources.list (HARDCODED AS BIONIC)
+  apt_repository:
+    state: present
+    #sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable
+
+- name: Update repo and upgrade packages
+  apt:
+    upgrade: dist
+    update_cache: yes
+
+- name: Install Common Packages
+  apt:
+    pkg:
+    - htop
+    - ncdu
+    - vim
+    - tree
+    - unzip
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - software-properties-common
+    - docker-ce
+    - apt-transport-https
+    - ca-certificates
+    - jq
+    - yamllint
+
+- name: apend user to docker group
+  user:
+    #name: "{{ lookup('env','USER') }}"
+    #name: "{{ user }}" 
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+
+# REQUIRE DOCKER COMPOSE > 1.19 so cannot use apt source, instead directdownload
+- name: download docker-compose
+  get_url:
+    url: https://github.com/docker/compose/releases/download/1.26.2/docker-compose-Linux-x86_64
+    dest: /usr/local/bin/docker-compose
+    mode: 0764
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Download and Unarchive a file harbor
+  unarchive:
+    src: https://github.com/goharbor/harbor/releases/download/v2.0.2/harbor-online-installer-v2.0.2.tgz
+    dest: .
+    remote_src: yes
+
+
+- name: create  directory for the key
+  file:
+    state: directory
+    path: /etc/docker/certs/harbor:443
+    mode: 0775
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: "Copying the harborlabkey"
+  copy: src=./roles/harbor/files/harborlab.key dest=/etc/docker/certs/harbor:443/harborlab.key owner={{ ansible_user }} group=root mode=0644
+- name: "Copying the harborlabkey"
+  copy: src=./roles/harbor/files/harborlab.cert dest=/etc/docker/certs/harbor:443/harborlab.cert owner={{ ansible_user }} group=root mode=0644
+- name: "Copying the harbor.yml"
+  copy: src=./roles/harbor/files/harbor.yml dest=./harbor/harbor.yml owner={{ ansible_user }} group=root mode=0644
+
+### copy prepared harbor.yaml
+
+
+
+###SOME MORE FILES
+- name: "Copying the motd"
+  copy: src=./roles/harbor/files/motd dest=/etc/motd owner={{ ansible_user }} group=root mode=0644
+#- name: "Copying the bashalias file"
+#  copy: src=./roles/harbor/files/.bash_aliases dest=./.bash_aliases owner={{ ansible_user }} group=root mode=0644
+#- name: "Copy post install bash script of useful thingsa"
+#  copy: src=./roles/harbor/files/postinstall.sh dest=./postinstall.sh owner={{ ansible_user }} group=root mode=0744
